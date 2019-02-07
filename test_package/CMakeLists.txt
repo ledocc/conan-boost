@@ -19,9 +19,9 @@ IF(NOT HEADER_ONLY)
         set(Boost_USE_STATIC_LIBS ON)
     endif()
 	if(WITH_PYTHON)
-		find_package(Boost COMPONENTS regex python REQUIRED)
+		find_package(Boost COMPONENTS regex python locale REQUIRED)
 	else()
-		find_package(Boost COMPONENTS regex REQUIRED)
+		find_package(Boost COMPONENTS regex locale REQUIRED)
 	endif()
 
     include_directories(${Boost_INCLUDE_DIRS})
@@ -41,6 +41,14 @@ IF(NOT HEADER_ONLY)
     endif()
     ADD_TEST(NAME TestRegex
              COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} "$<TARGET_FILE:regex_exe>")
+
+    if(LOCALE_USE_ICU)
+        ADD_EXECUTABLE(locale_use_icu locale_use_icu.cpp)
+        TARGET_LINK_LIBRARIES(locale_use_icu ${Boost_LIBRARIES})
+        ADD_TEST(NAME TestLocaleUseICU
+            COMMAND ${CMAKE_CROSSCOMPILING_EMULATOR} "$<TARGET_FILE:locale_use_icu>")
+
+    endif()
 
 ELSE()
 	ADD_EXECUTABLE(lambda lambda.cpp)

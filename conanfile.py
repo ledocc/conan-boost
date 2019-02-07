@@ -2,7 +2,7 @@ from conans import ConanFile
 from conans import tools
 from conans.client.build.cppstd_flags import cppstd_flag
 from conans.model.version import Version
-from conans.errors import ConanException
+from conans.errors import ConanException, ConanInvalidConfiguration
 
 import os
 import sys
@@ -44,7 +44,8 @@ class BoostConan(ConanFile):
         "python_executable": "ANY",  # system default python installation is used, if None
         "python_version": "ANY",  # major.minor; computed automatically, if None
         "namespace": "ANY",  # custom boost namespace for bcp, e.g. myboost
-        "namespace_alias": [True, False]  # enable namespace alias for bcp, boost=myboost
+        "namespace_alias": [True, False],  # enable namespace alias for bcp, boost=myboost
+        "locale_use_icu": [True, False]  # use ICU in boost::locale
     }
     options.update({"without_%s" % libname: [True, False] for libname in lib_list})
 
@@ -59,12 +60,14 @@ class BoostConan(ConanFile):
                        "python_executable=None",
                        "python_version=None",
                        "namespace=boost",
-                       "namespace_alias=False"]
+                       "namespace_alias=False",
+                       "locale_use_icu=False"]
 
     default_options.extend(["without_%s=False" % libname for libname in lib_list if libname != "python"])
     default_options.append("without_python=True")
     default_options.append("bzip2:shared=False")
     default_options.append("zlib:shared=False")
+    default_options.append("icu:shared=True")
     default_options = tuple(default_options)
 
     url = "https://github.com/lasote/conan-boost"
@@ -92,6 +95,12 @@ class BoostConan(ConanFile):
         if self.zip_bzip2_requires_needed:
             self.requires("bzip2/1.0.6@conan/stable")
             self.requires("zlib/1.2.11@conan/stable")
+        if ( not self.options.without_locale ) and self.options.locale_use_icu:
+            if not self.options.shared:
+                raise ConanInvalidConfiguration("Boost::locale can also use ICU library when build with option boost:shared=True.")
+            if not self.options["icu"].shared:
+                raise ConanInvalidConfiguration("Boost::locale can also use ICU library with option icu:shared=True.")
+            self.requires("icu/63.1@bincrafters/stable")
 
     def package_id(self):
         if self.options.header_only:
@@ -553,6 +562,17 @@ class BoostConan(ConanFile):
         cxx_flags = 'cxxflags="%s"' % " ".join(cxx_flags) if cxx_flags else ""
         flags.append(cxx_flags)
 
+        if not self.options.without_locale:
+            if self.options.locale_use_icu:
+                flags.append( "boost.locale.icu=on" )
+                flags.append( "-sICU_PATH=%s" % self.deps_cpp_info["icu"].rootpath )
+            else:
+                flags.append( "boost.locale.icu=off" )
+
+
+        for f in flags:
+            print(f)
+
         return flags
 
     def get_build_cross_flags(self):
@@ -615,6 +635,7 @@ class BoostConan(ConanFile):
                 self.deps_cpp_info["bzip2"].include_paths[0].replace('\\', '/'),
                 self.deps_cpp_info["bzip2"].lib_paths[0].replace('\\', '/'),
                 self.deps_cpp_info["bzip2"].libs[0])
+
 
         if not self.options.without_python:
             # https://www.boost.org/doc/libs/1_69_0/libs/python/doc/html/building/configuring_boost_build.html

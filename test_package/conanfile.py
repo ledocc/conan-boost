@@ -19,6 +19,8 @@ class DefaultNameConan(ConanFile):
             cmake.definitions["HEADER_ONLY"] = "TRUE"
         if self.options["boost"].python:
             cmake.definitions["WITH_PYTHON"] = "TRUE"
+        if self.options["boost"].locale_use_icu:
+            cmake.definitions["LOCALE_USE_ICU"] = "TRUE"
 
         cmake.configure()
         cmake.build()
