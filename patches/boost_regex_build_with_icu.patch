@@ -1,0 +1,140 @@
+diff -Naur a/libs/regex/build/Jamfile.v2 b/libs/regex/build/Jamfile.v2
+--- a/libs/regex/build/Jamfile.v2	2018-12-05 20:58:22.000000000 +0100
++++ b/libs/regex/build/Jamfile.v2	2019-02-12 07:44:00.000000000 +0100
+@@ -1,6 +1,6 @@
+ # copyright John Maddock 2003
+-# Distributed under the Boost Software License, Version 1.0. 
+-# (See accompanying file LICENSE_1_0.txt or copy at 
++# Distributed under the Boost Software License, Version 1.0.
++# (See accompanying file LICENSE_1_0.txt or copy at
+ # http://www.boost.org/LICENSE_1_0.txt.
+ 
+ import modules ;
+@@ -16,7 +16,7 @@
+ rule path_options ( properties * )
+ {
+     local result ;
+-    if <address-model>64 in $(properties) && <toolset>msvc in $(properties) 
++    if <address-model>64 in $(properties) && <toolset>msvc in $(properties)
+     {
+     	result = <search>$(ICU_PATH)/bin64 <search>$(ICU_PATH)/lib64 ;
+     }
+@@ -34,11 +34,24 @@
+ {
+ 
+    if [ modules.peek : ICU_PATH ]
+-   {    
++   {
+        ICU_PATH =  [ modules.peek : ICU_PATH ] ;
+    }
++   if [ modules.peek : ICU_LINK_TYPE ]
++   {
++       ICU_LINK_TYPE =  [ modules.peek : ICU_LINK_TYPE ] ;
++       if ! $(ICU_LINK_TYPE) in shared static
++       {
++          EXIT "error: Invalid ICU_LINK_TYPE : $(ICU_LINK_TYPE). Valid value are \"shared or static\"" : 1 ;
++       }
++   }
++   else
++   {
++      ICU_LINK_TYPE = shared ;
++   }
++
+    if [ modules.peek : ICU_LINK ]
+-   {    
++   {
+        ICU_LINK =  [ modules.peek : ICU_LINK ] ;
+    }
+ 
+@@ -48,10 +61,10 @@
+    }
+    else
+    {
+-      lib icuuc : :                                                               <runtime-link>shared <conditional>@path_options ;
+-      lib icuuc : : <toolset>msvc                     <variant>debug <name>icuucd <runtime-link>shared <conditional>@path_options ;
+-      lib icuuc : : <toolset>intel <target-os>windows <variant>debug <name>icuucd <runtime-link>shared <conditional>@path_options ;
+-      lib icuuc : :                                                  <name>sicuuc <runtime-link>static <conditional>@path_options ;
++      lib icuuc : :                                                  <name>icuuc   <runtime-link>shared <conditional>@path_options ;
++      lib icuuc : : <toolset>msvc                     <variant>debug <name>icuucd  <runtime-link>shared <conditional>@path_options ;
++      lib icuuc : : <toolset>intel <target-os>windows <variant>debug <name>icuucd  <runtime-link>shared <conditional>@path_options ;
++      lib icuuc : :                                                  <name>sicuuc  <runtime-link>static <conditional>@path_options ;
+       lib icuuc : : <toolset>msvc                     <variant>debug <name>sicuucd <runtime-link>static <conditional>@path_options ;
+       lib icuuc : : <toolset>intel <target-os>windows <variant>debug <name>sicuucd <runtime-link>static <conditional>@path_options ;
+       lib icuuc : : <name>this_is_an_invalid_library_name ;
+@@ -76,17 +89,32 @@
+       lib icuin : : <toolset>intel <target-os>windows                  <name>sicuin   <runtime-link>static <conditional>@path_options ;
+       lib icuin : : <name>this_is_an_invalid_library_name ;
+ 
+-      ICU_OPTS = 
+-         <include>$(ICU_PATH)/include 
+-         <runtime-link>shared:<library>icuuc/<link>shared
+-         <runtime-link>shared:<library>icudt/<link>shared
+-         <runtime-link>shared:<library>icuin/<link>shared
+-         <runtime-link>static:<library>icuuc
+-         <runtime-link>static:<library>icudt
+-         <runtime-link>static:<library>icuin
+-         <define>BOOST_HAS_ICU=1 
+-         <runtime-link>static:<define>U_STATIC_IMPLEMENTATION=1
++      lib dl : : <target-os>linux <name>dl <runtime-link>shared ;
++      lib dl : : <name>this_is_an_invalid_library_name ;
++
++      ICU_OPTS =
++         <include>$(ICU_PATH)/include
++         <define>BOOST_HAS_ICU=1
++         ;
++
++      if $(ICU_LINK_TYPE) = static
++      {
++         ICU_OPTS +=
++            <library>icuuc/<link>static
++            <library>icudt/<link>static
++            <library>icuin/<link>static
++            <target-os>linux:<library>dl
++            <define>U_STATIC_IMPLEMENTATION=1
++         ;
++      }
++      else
++      {
++         ICU_OPTS +=
++            <library>icuuc/<link>shared
++            <library>icudt/<link>shared
++            <library>icuin/<link>shared
+          ;
++      }
+    }
+ 
+ }
+@@ -96,7 +124,7 @@
+ 
+ alias icu_options : : : : [ check-target-builds has_icu : $(ICU_OPTS) : ] ;
+ 
+-SOURCES = 
++SOURCES =
+    c_regex_traits.cpp
+    cpp_regex_traits.cpp
+    cregex.cpp
+@@ -112,22 +140,14 @@
+    w32_regex_traits.cpp
+    wc_regex_traits.cpp
+    wide_posix_api.cpp
+-   winstances.cpp 
++   winstances.cpp
+    usinstances.cpp ;
+ 
+ 
+ lib boost_regex : ../src/$(SOURCES) icu_options
+-    :         
++    :
+ 	     <link>shared:<define>BOOST_REGEX_DYN_LINK=1
+ 	     <toolset>gcc-cygwin:<link>static
+     ;
+ 
+ boost-install boost_regex ;
+-
+-
+-
+-
+-
+-
+-
+-

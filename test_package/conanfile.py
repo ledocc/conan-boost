@@ -10,18 +10,26 @@ import sys
 class DefaultNameConan(ConanFile):
     name = "DefaultName"
     version = "0.1"
-    settings = "os", "compiler", "arch", "build_type"
+    settings = "os", "compiler", "arch", "build_type", "cppstd"
     generators = "cmake"
 
     def build(self):
         cmake = CMake(self)
+        cmake.verbose = True
         if self.options["boost"].header_only:
             cmake.definitions["HEADER_ONLY"] = "TRUE"
         if self.options["boost"].python:
             cmake.definitions["WITH_PYTHON"] = "TRUE"
+        if self.options["boost"].use_icu:
+            cmake.definitions["USE_ICU"] = "TRUE"
+
+        if "CONAN_CMAKE_CXX_STANDARD" in cmake.definitions:
+            cmake.definitions["CMAKE_CXX_STANDARD"] = cmake.definitions["CONAN_CMAKE_CXX_STANDARD"]
+            cmake.definitions["CMAKE_CXX_EXTENSIONS"] = cmake.definitions["CONAN_CMAKE_CXX_EXTENSIONS"]
 
         cmake.configure()
         cmake.build()
+
 
     def test(self):
         bt = self.settings.build_type

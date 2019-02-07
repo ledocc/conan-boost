@@ -2,7 +2,7 @@ from conans import ConanFile
 from conans import tools
 from conans.client.build.cppstd_flags import cppstd_flag
 from conans.model.version import Version
-from conans.errors import ConanException
+from conans.errors import ConanException, ConanInvalidConfiguration
 
 import os
 import sys
@@ -44,7 +44,8 @@ class BoostConan(ConanFile):
         "python_executable": "ANY",  # system default python installation is used, if None
         "python_version": "ANY",  # major.minor; computed automatically, if None
         "namespace": "ANY",  # custom boost namespace for bcp, e.g. myboost
-        "namespace_alias": [True, False]  # enable namespace alias for bcp, boost=myboost
+        "namespace_alias": [True, False],  # enable namespace alias for bcp, boost=myboost
+        "use_icu": [True, False]  # use ICU in boost (locale and regex)
     }
     options.update({"without_%s" % libname: [True, False] for libname in lib_list})
 
@@ -59,12 +60,14 @@ class BoostConan(ConanFile):
                        "python_executable=None",
                        "python_version=None",
                        "namespace=boost",
-                       "namespace_alias=False"]
+                       "namespace_alias=False",
+                       "use_icu=False"]
 
     default_options.extend(["without_%s=False" % libname for libname in lib_list if libname != "python"])
     default_options.append("without_python=True")
     default_options.append("bzip2:shared=False")
     default_options.append("zlib:shared=False")
+    default_options.append("icu:shared=False")
     default_options = tuple(default_options)
 
     url = "https://github.com/lasote/conan-boost"
@@ -88,10 +91,22 @@ class BoostConan(ConanFile):
     def zip_bzip2_requires_needed(self):
         return not self.options.without_iostreams and not self.options.header_only
 
+    @property
+    def icu_requires_needed(self):
+        if self.options.without_locale and self.options.without_regex:
+            return False
+        if self.options.header_only:
+            return False
+        return self.options.use_icu
+
     def configure(self):
         if self.zip_bzip2_requires_needed:
             self.requires("bzip2/1.0.6@conan/stable")
             self.requires("zlib/1.2.11@conan/stable")
+        if  self.icu_requires_needed:
+            if self.settings.cppstd in [ None, "98", "gnu98" ]:
+                raise ConanInvalidConfiguration("ICU library require C++11 or above.")
+            self.requires("icu/63.1@bincrafters/stable")
 
     def package_id(self):
         if self.options.header_only:
@@ -115,8 +130,11 @@ class BoostConan(ConanFile):
         url = "https://dl.bintray.com/boostorg/release/%s/source/%s" % (self.version, zip_name)
         tools.get(url, sha256=sha256)
 
-        tools.patch(base_path=os.path.join(self.source_folder, self.folder_name),
-                    patch_file='patches/python_base_prefix.patch', strip=1)
+        for patch_file in ['patches/boost_locale_build_with_icu.patch',
+                           'patches/boost_regex_build_with_icu.patch',
+                           'patches/python_base_prefix.patch']:
+            tools.patch(base_path=os.path.join(self.source_folder, self.folder_name),
+                        patch_file=patch_file, strip=1)
 
     ##################### BUILDING METHODS ###########################
 
@@ -552,6 +570,18 @@ class BoostConan(ConanFile):
 
         cxx_flags = 'cxxflags="%s"' % " ".join(cxx_flags) if cxx_flags else ""
         flags.append(cxx_flags)
+
+
+        if self.icu_requires_needed:
+            flags.append( "-sICU_PATH=%s" % self.deps_cpp_info["icu"].rootpath )
+            if self.options["icu"].shared == False:
+                flags.append( "-sICU_LINK_TYPE=static" )
+
+        if not self.options.without_locale:
+            if self.options.use_icu:
+                flags.append( "boost.locale.icu=on" )
+            else:
+                flags.append( "boost.locale.icu=off" )
 
         return flags
 
