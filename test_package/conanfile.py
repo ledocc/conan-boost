@@ -18,8 +18,10 @@ class DefaultNameConan(ConanFile):
         cmake.verbose = True
         if self.options["boost"].header_only:
             cmake.definitions["HEADER_ONLY"] = "TRUE"
-        if self.options["boost"].python:
+        if not self.options["boost"].without_python:
             cmake.definitions["WITH_PYTHON"] = "TRUE"
+            cmake.definitions["PYTHON_VERSION"] = "{}".format( self.options["boost"].python_version )
+
         if self.options["boost"].use_icu:
             cmake.definitions["USE_ICU"] = "TRUE"
 
