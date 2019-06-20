@@ -49,7 +49,8 @@ class BoostConan(ConanFile):
         "zlib": [True, False],
         "bzip2": [True, False],
         "lzma": [True, False],
-        "zstd": [True, False]
+        "zstd": [True, False],
+        "use_icu": [True, False]  # use ICU in boost (locale and regex)
     }
     options.update({"without_%s" % libname: [True, False] for libname in lib_list})
 
@@ -69,7 +70,8 @@ class BoostConan(ConanFile):
                        "zlib=True",
                        "bzip2=True",
                        "lzma=False",
-                       "zstd=False"]
+                       "zstd=False",
+                       "use_icu=False"]
 
     default_options.extend(["without_%s=False" % libname for libname in lib_list if libname != "python"])
     default_options.append("without_python=True")
@@ -96,6 +98,14 @@ class BoostConan(ConanFile):
     def zip_bzip2_requires_needed(self):
         return not self.options.without_iostreams and not self.options.header_only
 
+    @property
+    def icu_requires_needed(self):
+        if self.options.without_locale and self.options.without_regex:
+            return False
+        if self.options.header_only:
+            return False
+        return self.options.use_icu
+
     def configure(self):
         if self.zip_bzip2_requires_needed:
             if self.options.zlib:
@@ -106,6 +116,9 @@ class BoostConan(ConanFile):
                 self.requires("lzma/5.2.4@bincrafters/stable")
             if self.options.zstd:
                 self.requires("zstd/1.3.5@bincrafters/stable")
+        if  self.icu_requires_needed:
+            self.requires("icu/64.2@bincrafters/stable")
+
 
     def package_id(self):
         if self.options.header_only:
@@ -131,10 +144,12 @@ class BoostConan(ConanFile):
         tools.get(url, sha256=sha256)
 
         for patch in ["python_base_prefix.patch",
-                      "bcp_namespace_issues.patch"]:
+                      "bcp_namespace_issues.patch",
+                      "boost_build_configure_relevant.patch",
+                      "boost_locale_build_with_icu.patch",
+                      "boost_regex_build_with_icu.patch"]:
             tools.patch(patch_file=os.path.join("patches", patch),
                         base_path=os.path.join(self.source_folder, self.folder_name))
-
 
     ##################### BUILDING METHODS ###########################
 
@@ -412,7 +427,20 @@ class BoostConan(ConanFile):
                 with tools.environment_append({"BOOST_BUILD_PATH": self._boost_build_dir}):
                     # To show the libraries *1
                     # self.run("%s --show-libraries" % b2_exe)
-                    self.run(full_command)
+                    self.run(full_command, run_environment=True)
+        
+        try:
+            filename=os.path.join( self.build_folder, "boost", "bin.v2", "config.log")
+            print("********************************************************************************")
+            print("********************************************************************************")
+            print(filename)
+            with open( filename , 'r') as _file:
+                for _line in iter((_file.readline),""):
+                    print( _line )
+            print("********************************************************************************")
+            print("********************************************************************************")            
+        except IOError as _err:
+            sys.stderr.write(os.path.basename(sys.argv[0]) + ": " + filename + ": " + _err.strerror + "\n")
 
     @property
     def _b2_os(self):
@@ -600,6 +628,19 @@ class BoostConan(ConanFile):
 
         cxx_flags = 'cxxflags="%s"' % " ".join(cxx_flags) if cxx_flags else ""
         flags.append(cxx_flags)
+
+
+        if self.icu_requires_needed:
+            icu_root_dir=self.deps_cpp_info["icu"].rootpath
+            flags.append( "-sICU_PATH=%s" % icu_root_dir )
+            if self.options["icu"].shared == False:
+                flags.append( "-sICU_LINK_TYPE=static" )
+
+        if not self.options.without_locale:
+            if self.icu_requires_needed:
+                flags.append( "boost.locale.icu=on" )
+            else:
+                flags.append( "boost.locale.icu=off" )
 
         return flags
 
